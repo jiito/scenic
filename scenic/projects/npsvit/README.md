@@ -1,3 +1,3 @@
-# SVViT
+# NPSViT
 
-The Structural Variant Vision Transformer (SVViT) project aims to identify and genotype structural variants.
+An adaptation of SVViT to work with simulated data
