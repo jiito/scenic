@@ -17,7 +17,7 @@ PILEUP_FLANK = 150
 PILEUP_HEIGHT = 299
 PILEUP_FLANK_PAIRED = 500
 PILEUP_HEIGHT_PAIRED = 149
-PILEUP_NUM_CHANNELS = 7
+PILEUP_NUM_CHANNELS = 9
 
 
 def pileup_parser(
@@ -307,7 +307,7 @@ def get_dataset(*,
 
   num_classes = 3
   image_size = 256
-  input_shape = [-1, image_size, image_size, 7]
+  input_shape = [-1, image_size, image_size, 9]
 
   meta_data = {
       'num_classes': num_classes,

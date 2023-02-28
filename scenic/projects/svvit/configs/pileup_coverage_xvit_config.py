@@ -17,6 +17,11 @@ def get_config():
   config.dataset_name = 'pileup_coverage'
   config.data_dtype_str = 'float32'
 
+  config.dataset_configs = ml_collections.ConfigDict()
+  config.dataset_configs.train_path = '/storage/mlinderman/projects/sv/npsv2-experiments/HG002_SVs_Tier1_v0.6.genotyped.passing.tier1.b37.DEL.validation.flattened.tfrecords.gz'
+  config.dataset_configs.eval_path = '/storage/mlinderman/projects/sv/npsv2-experiments/HG002_SVs_Tier1_v0.6.genotyped.passing.tier1.b37.DEL.validation.flattened.tfrecords.gz'
+  config.dataset_configs.test_path = '/storage/mlinderman/projects/sv/npsv2-experiments/HG002_SVs_Tier1_v0.6.genotyped.passing.tier1.b37.DEL.validation.flattened.tfrecords.gz'
+  
   # Model.
   config.model_name = 'xvit_classification'
   config.model_dtype_str = 'float32'
@@ -24,7 +29,7 @@ def get_config():
   config.model.patches = ml_collections.ConfigDict()
   config.model.hidden_size = 768
   config.model.patches = ml_collections.ConfigDict()
-  config.model.patches.size = [4, 4]
+  config.model.patches.size = [16, 16]
   config.model.mlp_dim = 3072
   config.model.num_layers = 12
   config.model.representation_size = None
@@ -50,7 +55,7 @@ def get_config():
   config.label_smoothing = None
   config.num_training_epochs = 200
   config.log_eval_steps = 1000
-  config.batch_size = 128  # >=256 causes RESOURCE EXHAUSTED errors.
+  config.batch_size = 64  # >=256 causes RESOURCE EXHAUSTED errors.
   config.rng_seed = 42
   config.init_head_bias = -10.0
 
@@ -69,9 +74,9 @@ def get_config():
   # Logging.
   config.write_summary = True
   config.xprof = True  # Profile using xprof.
-  config.checkpoint = True  # Do checkpointing.
+  config.checkpoint = False  # Do checkpointing.
   config.checkpoint_steps = 5000
-  config.debug_train = False  # Debug mode during training.
+  config.debug_train = True  # Debug mode during training.
   config.debug_eval = False  # Debug mode during eval.
 
   # Evaluation:

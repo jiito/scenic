@@ -157,6 +157,17 @@ def build_dataset(dataset_fn,
 
   return ds
 
+def get_dataset_name(dataset_path: Optional[str] = None):
+  """Extract dataset name for eval_iter in xmanager measurements.
+
+  Parent directory of the dataset files is used as its name.
+  Args:
+    dataset_path: Path to the dataset files.
+
+  Returns:
+    Dataset name.
+  """
+  return 'test' if not dataset_path else dataset_path.split('/')[-2]
 
 @datasets.add_dataset('pileup_coverage')
 def get_dataset(*,
@@ -289,7 +300,7 @@ def get_dataset(*,
 
   num_classes = 3
   image_size = 256
-  input_shape = [-1, image_size, image_size, 7]
+  input_shape = [-1, image_size, image_size, 9]
 
   meta_data = {
       'num_classes': num_classes,
@@ -297,6 +308,8 @@ def get_dataset(*,
       'num_train_examples': 31000 * 24,
       'num_eval_examples': 31000 * 6,
       'num_test_examples': 31000,
+      'test_name': get_dataset_name(dataset_configs.test_path),
+      'eval_name': get_dataset_name(dataset_configs.eval_path),
       'input_dtype': getattr(jnp, dtype_str),
       'target_is_onehot': True,
   }
