@@ -13,25 +13,75 @@ import tensorflow as tf
 
 
 
-def _extract_metadata_from_first_example(filename: str) -> Tuple[int]:
-  """Extracts the image shape from the first example."""
-  raw_example = next(
-      iter(
-          tf.data.TFRecordDataset(
-              filenames=filename,
-              compression_type=_filename_to_compression(filename))))
-  example = tf.train.Example.FromString(raw_example.numpy())
+def _example_image(example):
+    image_data = tf.io.parse_tensor(example.features.feature["image/encoded"].bytes_list.value[0], tf.uint8).numpy()
+    return image_data
 
-  return tuple(example.features.feature['image/shape'].int64_list.value)
+
+def _example_image_shape(example):
+    return tuple(example.features.feature["image/shape"].int64_list.value)
+
+
+def _example_addl_attribute(example, attr):
+    return float(example.features.feature[attr].float_list.value[0])
+
+
+def _example_label(example):
+    return int(example.features.feature["label"].int64_list.value[0])
+
+
+def _example_sim_images_shape(example):
+    if "sim/images/shape" in example.features.feature:
+        return tuple(example.features.feature["sim/images/shape"].int64_list.value)
+    else:
+        return (3, 0, None, None, None)
+
+
+def _example_sim_images(example):
+    image_data = tf.io.parse_tensor(
+        example.features.feature["sim/images/encoded"].bytes_list.value[0], tf.uint8
+    ).numpy()
+    return image_data
+
+
+def _extract_metadata_from_first_example(filename, pileup_image_channels=None):
+    raw_example = next(
+        iter(tf.data.TFRecordDataset(filenames=filename, compression_type=_filename_to_compression(filename)))
+    )
+    example = tf.train.Example.FromString(raw_example.numpy())
+
+    image_shape = _example_image_shape(example)
+    ac, replicates, *sim_image_shape = _example_sim_images_shape(example)
+    if replicates > 0:
+        assert ac == 3, "Incorrect number of genotypes in simulated data"
+        assert image_shape == tuple(sim_image_shape), "Simulated and actual image shapes don't match"
+    if pileup_image_channels:
+        assert len(pileup_image_channels) <= image_shape[-1], "More channels requested than available"
+        image_shape = image_shape[:-1] + (len(pileup_image_channels),)
+
+    return image_shape, replicates
+
+# def _extract_metadata_from_first_example(filename: str) -> Tuple[int]:
+#   """Extracts the image shape from the first example."""
+#   raw_example = next(
+#       iter(
+#           tf.data.TFRecordDataset(
+#               filenames=filename,
+#               compression_type=_filename_to_compression(filename))))
+#   example = tf.train.Example.FromString(raw_example.numpy())
+
+#   return tuple(example.features.feature['image/shape'].int64_list.value)
 
 
 def _filename_to_compression(filename: str) -> Optional[str]:
   return 'GZIP' if tf.strings.regex_full_match(filename, '.*.gz') else None
+  
 
 
 def create_coverage_based_dataset(
     filenames: str,
     with_label: bool = True,
+    with_simulation: bool = True
 ) -> tf.data.Dataset:
   """Creates a coverage based pileup dataset from a filepath.
 
@@ -42,11 +92,10 @@ def create_coverage_based_dataset(
   Returns:
     tf.data.Dataset
   """
-  logging.info('Finding all data files matching the file pattern.')
   dataset_files = tf.io.matching_files(filenames)
 
   # Extract image shape from the first example
-  shape = _extract_metadata_from_first_example(dataset_files[0])
+  shape, num_replicates = _extract_metadata_from_first_example(dataset_files[0])
 
   proto_features = {
       'variant/encoded': tf.io.FixedLenFeature(shape=(), dtype=tf.string),
@@ -55,18 +104,39 @@ def create_coverage_based_dataset(
   }
   if with_label:
     proto_features['label'] = tf.io.FixedLenFeature(shape=1, dtype=tf.int64)
+  if with_simulation and num_replicates > 0:
+    proto_features.update(
+      {
+        "sim/images/shape": tf.io.FixedLenFeature(shape=(len(shape) + 2,), dtype=tf.int64),
+        "sim/images/encoded": tf.io.FixedLenFeature(shape=(), dtype=tf.string),
+      }
+    )
 
   def _process_input(proto_string):
     """Helper function for input function that parses a serialized example."""
 
     parsed_features = tf.io.parse_single_example(
         serialized=proto_string, features=proto_features)
+    logging.info(parsed_features)
 
     features = {
+      'variant/encoded': parsed_features['variant/encoded'],
         'image': tf.io.parse_tensor(parsed_features['image/encoded'], tf.uint8),
     }
 
     features['image'].set_shape(shape)
+
+    if with_simulation:
+      features["sim/images"] = tf.io.parse_tensor(parsed_features["sim/images/encoded"], tf.uint8)
+      logging.info("With simulation (shape): %s", features["sim/images"].shape)
+
+
+    # logging.info("With simulation: %s", features["sim/images"])
+    # TODO: Use if selecting certain pileup channels
+    # if pileup_image_channels:
+    #     features["image"] = tf.gather(features["image"], indices=list(pileup_image_channels), axis=-1)
+    #     if with_simulations:
+    #         features["sim/images"] = tf.gather(features["sim/images"], indices=list(pileup_image_channels), axis=-1)
 
     if with_label:
       return features, parsed_features['label']
@@ -92,18 +162,61 @@ def create_coverage_based_dataset(
       cycle_length=len(dataset_files),
   )
 
+  # map the sim/images to the real image 
+
+
+  # dataset.flat_map(flatten_sim_images )
+  # logging.info("Dataset shape after Flattened sim images: %s", dataset.shape)
+
   return dataset
+
+def flatten_sim_images(features, label) -> tf.data.Dataset:
+  logging.info("Flattening sim images: %s, %s", features, label)
+  # unpack the simulated images 
+ 
+
+
+  # return the new dataset
+  return sim_images
+
+
+
+
+
+
 
 
 def preprocess(features, label):
   """Preprocessing code specific to ViT models."""
   label_tensor = tf.cast(tf.squeeze(label, [-1]), tf.int32)
-  return {
-      'inputs': tf.image.resize(
-          features['image'],
-          [256, 256]),  # Resize pileups to make side length divisible by 4.
-      'label': tf.one_hot(label_tensor, 3)
+  logging.info("Calling preprocess function")
+  logging.info("Label tensor: %s", label_tensor)
+
+  support = tf.reshape(features["sim/images"], [15, 100, 300, 9])
+
+  qeury = tf.tile(tf.expand_dims(features["image"], axis=0), [15, 1, 1, 1])
+
+  label_oh = tf.one_hot(label_tensor, 3)
+
+  label_oh = tf.reshape(tf.repeat(label_oh, repeats=5, axis=0),[15])
+
+  logging.info("Label one hot: %s", label_oh)
+
+  new = {
+      "support": support,
+      "query": qeury,
+    'label': label_oh
   }
+  return tf.data.Dataset.from_tensor_slices(new)
+
+  # return {
+  #   # TODO: modify to use support and query images (batch["inputs"])
+  #     'inputs': {
+  #         'support': features['sim/image'],
+  #         'query': features['image'],
+  #     },  # Resize pileups to make side length divisible by 4.
+  #     'label': tf.one_hot(label_tensor, 3)
+  # }
 
 
 def build_dataset(dataset_fn,
@@ -169,7 +282,8 @@ def get_dataset_name(dataset_path: Optional[str] = None):
   """
   return 'test' if not dataset_path else dataset_path.split('/')[-2]
 
-@datasets.add_dataset('pileup_coverage')
+print("building pileup dataset")
+@datasets.add_dataset('pileup_coverage_simulated')
 def get_dataset(*,
                 batch_size,
                 eval_batch_size,
@@ -227,15 +341,18 @@ def get_dataset(*,
     if not path:
       raise ValueError('No path provide. Please modify the path variable to '
                        'hardcode the %s path.' %split)
-    dataset = create_coverage_based_dataset(filenames=path)
+    dataset = create_coverage_based_dataset(filenames=path, with_label=True, with_simulation=True)
 
     # Creating a Dataset that includes only 1/num_shards of data so the data is
     # splitted between different hosts.
     num_hosts, host_id = jax.process_count(), jax.process_index()
     dataset = dataset.shard(num_shards=num_hosts, index=host_id)
 
-    dataset = dataset.map(
-        preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    # dataset = dataset.map(
+    #     preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.flat_map(
+        preprocess)
+    logging.info("Dataset after preprocessing: %s", dataset)
     return dataset
 
   # Use different seed for each host.
@@ -276,9 +393,13 @@ def get_dataset(*,
 
   shard_batches = functools.partial(dataset_utils.shard, n_devices=num_shards)
   maybe_pad_batches_train = functools.partial(
-      dataset_utils.maybe_pad_batch, train=True, batch_size=batch_size)
+      dataset_utils.maybe_pad_batch, train=True, batch_size=batch_size,inputs_key='support')
+  maybe_pad_batches_train = functools.partial(
+      dataset_utils.maybe_pad_batch, train=True, batch_size=batch_size,inputs_key='query')
   maybe_pad_batches_eval = functools.partial(
-      dataset_utils.maybe_pad_batch, train=False, batch_size=eval_batch_size)
+      dataset_utils.maybe_pad_batch, train=False, batch_size=eval_batch_size,inputs_key='support')
+  maybe_pad_batches_eval = functools.partial(
+      dataset_utils.maybe_pad_batch, train=False, batch_size=eval_batch_size,inputs_key='query')
 
   train_iter = iter(train_dataset)
   train_iter = map(dataset_utils.tf_to_numpy, train_iter)
@@ -300,7 +421,10 @@ def get_dataset(*,
 
   num_classes = 3
   image_size = 256
-  input_shape = [-1, image_size, image_size, 9]
+
+  # TODO: Change shape to list 
+  # Batch (-1) is determined at runtime.
+  input_shape = [-1, 100, 300, 9]
 
   meta_data = {
       'num_classes': num_classes,

@@ -11,19 +11,19 @@ _TRAIN_SIZE = 31_316 * 24
 def get_config():
   """Returns the X-ViT experiment configuration for SV classification."""
   config = ml_collections.ConfigDict()
-  config.experiment_name = 'sv-xvit-jf'
+  config.experiment_name = 'npsvit'
 
   # Dataset.
-  config.dataset_name = 'pileup_coverage'
+  config.dataset_name = 'pileup_coverage_simulated'
   config.data_dtype_str = 'float32'
 
   config.dataset_configs = ml_collections.ConfigDict()
-  config.dataset_configs.train_path = '/storage/mlinderman/projects/sv/npsv2-experiments/training/freeze3.sv.alt.passing.training.hg38.DEL.images/**/+pileup.snv_input=True,generator=single_depth_phaseread,pileup.discrete_mapq=True,pileup.render_snv=True,simulation.augment=False,simulation.chrom_norm_covg=True,simulation.replicates=5/images.flatten.tfrecords.gz'
-  config.dataset_configs.eval_path = '/storage/mlinderman/projects/sv/npsv2-experiments/HG002_SVs_Tier1_v0.6.genotyped.passing.tier1.b37.DEL.validation.flattened.tfrecords.gz'
-  config.dataset_configs.test_path = '/storage/mlinderman/projects/sv/npsv2-experiments/HG002_SVs_Tier1_v0.6.genotyped.passing.tier1.b37.DEL.validation.flattened.tfrecords.gz'
+  config.dataset_configs.train_path = '/storage/mlinderman/projects/sv/npsv2-experiments/training/freeze3.sv.alt.passing.training.hg38.DEL.images/**/+pileup.snv_input=True,generator=single_depth_phaseread,pileup.discrete_mapq=True,pileup.render_snv=True,simulation.augment=False,simulation.chrom_norm_covg=True,simulation.replicates=5/images.tfrecords.gz'
+  config.dataset_configs.eval_path = '/storage/mlinderman/projects/sv/npsv2-experiments/training/freeze3.sv.alt.passing.training.hg38.DEL.images/**/+pileup.snv_input=True,generator=single_depth_phaseread,pileup.discrete_mapq=True,pileup.render_snv=True,simulation.augment=False,simulation.chrom_norm_covg=True,simulation.replicates=5/images.tfrecords.gz'
+  config.dataset_configs.test_path = '/storage/mlinderman/projects/sv/npsv2-experiments/training/freeze3.sv.alt.passing.training.hg38.DEL.images/**/+pileup.snv_input=True,generator=single_depth_phaseread,pileup.discrete_mapq=True,pileup.render_snv=True,simulation.augment=False,simulation.chrom_norm_covg=True,simulation.replicates=5/images.tfrecords.gz'
   
   # Model.
-  config.model_name = 'xvit_classification'
+  config.model_name = 'xvit_paired'
   config.model_dtype_str = 'float32'
   config.model = ml_collections.ConfigDict()
   config.model.patches = ml_collections.ConfigDict()
@@ -43,7 +43,7 @@ def get_config():
   config.model.attention_configs.num_heads = 12
 
   # Training.
-  config.trainer_name = 'classification_trainer'
+  config.trainer_name = 'paired_trainer'
   config.optimizer = 'adam'
   config.optimizer_configs = ml_collections.ConfigDict()
   config.optimizer_configs.beta1 = 0.9
@@ -57,7 +57,7 @@ def get_config():
   config.log_eval_steps = 1000
   config.batch_size = 64  # >=256 causes RESOURCE EXHAUSTED errors.
   config.rng_seed = 42
-  config.init_head_bias = -10.0
+  config.init_head_bias = None
 
   # Learning rate.
   steps_per_epoch = _TRAIN_SIZE // config.batch_size
@@ -81,12 +81,12 @@ def get_config():
 
   # Evaluation:
   config.global_metrics = [
-      'truvari_recall_events',
-      'truvari_precision_events',
-      'truvari_recall',
-      'truvari_precision',
-      'gt_concordance',
-      'nonref_concordance',
+      # 'truvari_recall_events',
+      # 'truvari_precision_events',
+      # 'truvari_recall',
+      # 'truvari_precision',
+      # 'gt_concordance',
+      # 'nonref_concordance',
   ]
 
   return config

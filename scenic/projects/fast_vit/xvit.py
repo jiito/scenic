@@ -53,7 +53,6 @@ class Encoder1D(nn.Module):
 
     Returns:
     """
-    print("\t\t||||| INPUTS SHAPE: inputs.shape")
     assert inputs.ndim == 3  # Shape is `[batch, len, emb]`.
     x = attention_layers.Add1DPositionEmbedding(
         posemb_init=nn.initializers.normal(stddev=0.02),  # From BERT.

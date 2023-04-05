@@ -105,6 +105,8 @@ def initialize_model(
       dummy_input.append(jnp.zeros(in_st.shape, in_st.dtype))
     else:
       dummy_input.append(None)
+  # logging.info('Dummy input: %s', dummy_input)
+  # logging.info('Dummy input shape: %s', dummy_input.shape)
 
   # We want all parameters to be created in host RAM, not on any device, they'll
   # be sent there later as needed, otherwise we already encountered two
@@ -114,6 +116,8 @@ def initialize_model(
     """Initialization function to be jitted."""
     init_model_state, init_params = model_def.init(
         rngs, *dummy_input, train=False, debug=False).pop('params')
+    logging.info('Initialized model parameters: %s', init_params.keys())
+    logging.info('Initialized model state: %s', init_model_state)
     # Set bias in the head to low value, such that loss is small initially.
     if config.get('init_head_bias', None) is not None:
       init_params = flax.core.unfreeze(init_params)
